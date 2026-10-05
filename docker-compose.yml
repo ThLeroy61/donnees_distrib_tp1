@@ -39,3 +39,4 @@ networks:
   distributed-net:
     name: distributed-net
     driver: bridge
+    external: true
