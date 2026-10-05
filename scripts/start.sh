@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 set -e
-docker compose build
+docker network inspect distributed-net >/dev/null 2>&1 || docker network create --driver bridge distributed-net
 docker compose up -d
-echo
-echo "Cluster démarré."
-docker ps --filter "name=node-"
+docker ps --filter "name=replication-node"

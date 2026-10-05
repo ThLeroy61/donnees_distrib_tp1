@@ -1,59 +1,60 @@
-# TP1 — Distributed Data avec Docker
+# TP1 — Session 2 — Réplication distribuée V2
 
-Mini-cluster pédagogique pour le TP 1 du cours **Données distribuées — M2 Big Data & IA**.
+Mini-TP pédagogique : **réplication automatique et récupération après panne**.
 
-## Architecture
+## Objectif
 
-- 1 Leader
-- 2 Followers
-- 1 réseau Docker `distributed-net`
-- API HTTP préparée à l'avance
-- réplication simulée par envoi de la même donnée aux trois nœuds
+Montrer avec Docker + Flask comment une donnée peut être copiée sur plusieurs nœuds et comment un nœud qui disparaît peut récupérer automatiquement les données depuis un autre réplica **sans être redémarré**.
+
+Architecture :
 
 ```text
-Client
-  |
-  v
-Leader :8080
-  |\
-  | \
-  v  v
-F1:8081  F2:8082
-     \  /
-      \/
-distributed-net
+                    Client
+                      |
+                      v
+                +-----------+
+                |   Node 1  |
+                +-----+-----+
+                      |
+          +-----------+-----------+
+          |                       |
+          v                       v
+     +---------+             +---------+
+     | Node 2  |             | Node 3  |
+     +---------+             +---------+
 ```
 
-## Prérequis
+Les 3 nœuds stockent une copie des données. Une écriture sur n'importe quel nœud est propagée aux pairs disponibles.
 
-- Git
-- Docker Desktop
-- Docker Compose
-- Git Bash sous Windows (recommandé) ou terminal Linux/macOS
-- `curl`
+> Cette implémentation est une **simulation pédagogique**. Elle ne reproduit pas les garanties d'un SGBD distribué comme Cassandra.
 
-**Pas de Kubernetes / Minikube dans ce TP.**
+## Démarrage
 
-## Démarrage rapide
+Si le réseau existe déjà :
 
 ```bash
-docker compose build
 docker compose up -d
+```
+
+Sinon :
+
+```bash
+docker network create --driver bridge distributed-net
+docker compose up -d
+```
+
+Vérifier :
+
+```bash
 docker ps
 ```
 
-Tester :
+## Tester la réplication
+
+Écrire sur Node 1 :
 
 ```bash
-curl http://localhost:8080/health
-curl http://localhost:8081/health
-curl http://localhost:8082/health
-```
-
-Envoyer une donnée répliquée :
-
-```bash
-./scripts/send-data.sh product-001 "Produit A"
+curl -X POST http://localhost:8080/data   -H "Content-Type: application/json"   -d '{"key":"order-1","value":"Laptop - quantity=2 - price=1200"}'
 ```
 
 Vérifier :
@@ -64,25 +65,49 @@ curl http://localhost:8081/data
 curl http://localhost:8082/data
 ```
 
-## Panne
+Les trois nœuds doivent contenir `order-1`.
+
+## Simuler une panne
+
+Arrêter Node 2 :
 
 ```bash
-docker stop node-follower-1
-docker ps
+docker stop replication-node-2
 ```
 
-## Partition réseau
+Écrire une nouvelle donnée sur Node 1 :
 
 ```bash
-docker network disconnect distributed-net node-follower-2
-docker network inspect distributed-net
+curl -X POST http://localhost:8080/data   -H "Content-Type: application/json"   -d '{"key":"order-2","value":"Smartphone - quantity=1 - price=800"}'
 ```
 
-Reconnecter :
+Node 1 et Node 3 doivent recevoir `order-2`. Node 2 est indisponible.
+
+## Récupération sans redémarrer le nœud
+
+Supprimer complètement Node 2 :
 
 ```bash
-docker network connect distributed-net node-follower-2
+docker rm -f replication-node-2
 ```
+
+Le service reste disponible sur Node 1 et Node 3.
+
+Créer un nouveau nœud 2 avec le même service :
+
+```bash
+docker compose up -d replication-node-2
+```
+
+Le nouveau Node 2 démarre vide puis récupère automatiquement les données depuis un pair disponible.
+
+Vérifier après quelques secondes :
+
+```bash
+curl http://localhost:8081/data
+```
+
+Il doit récupérer `order-1` et `order-2`.
 
 ## Nettoyage
 
@@ -90,41 +115,4 @@ docker network connect distributed-net node-follower-2
 docker compose down
 ```
 
-## Organisation
-
-```text
-.
-├── app/
-│   ├── Dockerfile
-│   └── app.py
-├── docs/
-├── scripts/
-│   ├── cleanup.ps1
-│   ├── cleanup.sh
-│   ├── send-data.ps1
-│   ├── send-data.sh
-│   ├── start.ps1
-│   ├── start.sh
-│   ├── status.ps1
-│   └── status.sh
-├── student/
-│   └── TP.md
-├── docker-compose.yml
-├── README.md
-└── TP1.md
-```
-
-## Important
-
-Ce projet est une **simulation pédagogique**. Les rôles Leader/Follower et la réplication ne constituent pas l'implémentation d'une base de données distribuée réelle.
-
-Le TP vise à faire comprendre les concepts de :
-
-- nœud ;
-- réseau ;
-- réplication ;
-- panne ;
-- partition réseau ;
-- résilience ;
-- cohérence ;
-- complexité des systèmes distribués.
+Le réseau externe n'est pas supprimé.

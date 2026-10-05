@@ -1,42 +1,44 @@
 services:
-  leader-node:
+  replication-node-1:
     build: ./app
-    container_name: node-leader
+    container_name: replication-node-1
+    hostname: replication-node-1
     environment:
-      NODE_NAME: leader
-      ROLE: leader
+      NODE_ID: node-1
       PORT: 8080
-    networks:
-      - distributed-net
+      PEERS: http://replication-node-2:8080,http://replication-node-3:8080
     ports:
       - "8080:8080"
-
-  follower-node-1:
-    build: ./app
-    container_name: node-follower-1
-    environment:
-      NODE_NAME: follower-1
-      ROLE: follower
-      PORT: 8080
     networks:
       - distributed-net
+
+  replication-node-2:
+    build: ./app
+    container_name: replication-node-2
+    hostname: replication-node-2
+    environment:
+      NODE_ID: node-2
+      PORT: 8080
+      PEERS: http://replication-node-1:8080,http://replication-node-3:8080
     ports:
       - "8081:8080"
-
-  follower-node-2:
-    build: ./app
-    container_name: node-follower-2
-    environment:
-      NODE_NAME: follower-2
-      ROLE: follower
-      PORT: 8080
     networks:
       - distributed-net
+
+  replication-node-3:
+    build: ./app
+    container_name: replication-node-3
+    hostname: replication-node-3
+    environment:
+      NODE_ID: node-3
+      PORT: 8080
+      PEERS: http://replication-node-1:8080,http://replication-node-2:8080
     ports:
       - "8082:8080"
+    networks:
+      - distributed-net
 
 networks:
   distributed-net:
-    name: distributed-net
-    driver: bridge
     external: true
+    name: distributed-net
